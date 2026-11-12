@@ -12,7 +12,9 @@ import android.provider.AlarmClock
 import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
 import java.time.LocalDate
@@ -52,21 +55,68 @@ fun SearchBar(onSearch: () -> Unit, onAssistant: () -> Unit) {
     }
 }
 
+private fun openChat(ctx: Context) {
+    val n = WaContact.number
+    if (n.isNotBlank()) safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$n")))
+    else launchApp(ctx, "com.whatsapp")
+}
+
+/**
+ * Kontak WhatsApp asli: nama (dan foto) diambil dari kontak yang dipilih, pesan terbaru + jumlahnya
+ * dibaca langsung dari notifikasi WhatsApp. Ketuk = buka chat, tahan = pengaturan.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ContactPill(modifier: Modifier, apps: List<AppEntry>) {
+fun ContactPill(modifier: Modifier, apps: List<AppEntry>, onPick: () -> Unit, onSettings: () -> Unit) {
     val ctx = LocalContext.current
+    val name = WaContact.name
+    val photo = WaContact.photo
+    val msg = WaInbox.latestFor(name)
+    var listening by remember { mutableStateOf(listenerEnabled(ctx)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            listening = listenerEnabled(ctx)
+            delay(2000)
+        }
+    }
     Row(
-        modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.9f)).clickable {
-            if (Config.WA_NUMBER.isNotBlank()) {
-                safeStart(ctx, Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/${Config.WA_NUMBER}")))
-            } else launchApp(ctx, "com.whatsapp")
-        }.padding(horizontal = 10.dp),
+        modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.9f)).combinedClickable(
+            onClick = {
+                val pi = msg?.intent
+                when {
+                    name.isBlank() -> onPick()
+                    pi != null -> try { pi.send() } catch (_: Exception) { openChat(ctx) }
+                    else -> openChat(ctx)
+                }
+            },
+            onLongClick = onSettings,
+        ).padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppTile(Slots.whatsapp, apps, 36.dp)
-        Spacer(Modifier.weight(1f))
-        T(Config.CONTACT_NAME, 14, Ink, FontWeight.SemiBold)
-        Spacer(Modifier.weight(1.3f))
+        Box(Modifier.size(38.dp)) {
+            if (photo != null) {
+                Image(photo, null, Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
+                Box(Modifier.align(Alignment.BottomEnd)) { AppTile(Slots.whatsapp, apps, 16.dp, tappable = false) }
+            } else {
+                AppTile(Slots.whatsapp, apps, 36.dp, tappable = false)
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            T(if (name.isBlank()) "Pilih kontak" else name, 14, Ink, FontWeight.SemiBold)
+            val sub = when {
+                msg != null -> msg.text
+                name.isNotBlank() && !listening -> "Notif belum aktif"
+                else -> null
+            }
+            if (sub != null) T(sub, 10, Color(0xFF5B5B70), FontWeight.Normal)
+        }
+        if (msg != null) {
+            Spacer(Modifier.width(4.dp))
+            Box(Modifier.size(22.dp).clip(CircleShape).background(Color(0xFF25D366)), Alignment.Center) {
+                T("${msg.count}", 11, Color.White, FontWeight.Bold)
+            }
+        }
     }
 }
 

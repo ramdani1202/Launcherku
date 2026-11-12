@@ -2,9 +2,7 @@ package com.launcherku.app
 
 /** Ubah teks/data di sini sesuai kebutuhan, lalu push ke GitHub. */
 object Config {
-    // Pill kontak WhatsApp
-    const val CONTACT_NAME = "Istriku"
-    const val WA_NUMBER = "" // contoh: "6281234567890" (kosong = hanya buka WhatsApp)
+    // Kontak WhatsApp dipilih langsung di launcher (tahan pill kontak), tidak lagi diatur di sini.
 
     // Widget cuaca (tampilan statis)
     const val CITY = "Cideng"

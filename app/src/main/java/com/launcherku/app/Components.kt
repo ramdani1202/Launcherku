@@ -57,7 +57,7 @@ fun T(
 )
 
 @Composable
-fun AppTile(slot: Slot, apps: List<AppEntry>, size: Dp = 52.dp) {
+fun AppTile(slot: Slot, apps: List<AppEntry>, size: Dp = 52.dp, tappable: Boolean = true) {
     val ctx = LocalContext.current
     val entry = remember(apps, slot) { resolve(ctx, apps, slot) }
     val shape = RoundedCornerShape(size * 0.27f)
@@ -65,7 +65,9 @@ fun AppTile(slot: Slot, apps: List<AppEntry>, size: Dp = 52.dp) {
         Image(
             bitmap = entry.icon,
             contentDescription = entry.label,
-            modifier = Modifier.size(size).clip(shape).clickable { launchApp(ctx, entry.pkg) },
+            modifier = Modifier.size(size).clip(shape).let {
+                if (tappable) it.clickable { launchApp(ctx, entry.pkg) } else it
+            },
         )
     } else {
         Box(Modifier.size(size).clip(shape).background(slot.fallbackColor), Alignment.Center) {
@@ -75,28 +77,28 @@ fun AppTile(slot: Slot, apps: List<AppEntry>, size: Dp = 52.dp) {
 }
 
 @Composable
-fun Folder(slots: List<Slot>, apps: List<AppEntry>, columns: Int, modifier: Modifier = Modifier) {
+fun Folder(prefix: String, apps: List<AppEntry>, columns: Int, modifier: Modifier = Modifier) {
     Column(
         modifier.clip(RoundedCornerShape(28.dp)).background(Glass).padding(10.dp),
         verticalArrangement = Arrangement.SpaceEvenly,
     ) {
-        slots.chunked(columns).forEach { row ->
+        Defaults.ids(prefix).chunked(columns).forEach { row ->
             Row(
                 Modifier.fillMaxWidth().weight(1f),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
-            ) { row.forEach { AppTile(it, apps) } }
+            ) { row.forEach { EditableTile(it, apps) } }
         }
     }
 }
 
 @Composable
-fun Dock(slots: List<Slot>, apps: List<AppEntry>) {
+fun Dock(prefix: String, apps: List<AppEntry>) {
     Row(
         Modifier.fillMaxWidth().height(80.dp).clip(RoundedCornerShape(30.dp)).background(Glass),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
-    ) { slots.forEach { AppTile(it, apps, 54.dp) } }
+    ) { Defaults.ids(prefix).forEach { EditableTile(it, apps, 54.dp) } }
 }
 
 @Composable

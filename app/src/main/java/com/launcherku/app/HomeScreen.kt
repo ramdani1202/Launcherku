@@ -44,13 +44,25 @@ import java.time.LocalTime
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HomeScreen(apps: List<AppEntry>, homeSignal: Int, photoVersion: Int, pickPhoto: () -> Unit) {
+fun HomeScreen(
+    apps: List<AppEntry>,
+    homeSignal: Int,
+    photoVersion: Int,
+    pickPhoto: () -> Unit,
+    pickContact: () -> Unit,
+) {
     val ctx = LocalContext.current
     val pager = rememberPagerState { 2 }
     var drawer by remember { mutableStateOf(false) }
+    var contactMenu by remember { mutableStateOf(false) }
+    val store = remember { LayoutStore(ctx) }
+    val edit = remember { EditState() }
 
     LaunchedEffect(homeSignal) {
         drawer = false
+        contactMenu = false
+        edit.menuId = null
+        edit.pickId = null
         pager.scrollToPage(0)
     }
     BackHandler { if (drawer) drawer = false }
@@ -60,6 +72,7 @@ fun HomeScreen(apps: List<AppEntry>, homeSignal: Int, photoVersion: Int, pickPho
         if (ctx.packageManager.getLaunchIntentForPackage(g) != null) launchApp(ctx, g) else drawer = true
     }
 
+    CompositionLocalProvider(LocalLayout provides store, LocalEdit provides edit) {
     Box(
         Modifier.fillMaxSize()
             .background(
@@ -82,16 +95,16 @@ fun HomeScreen(apps: List<AppEntry>, homeSignal: Int, photoVersion: Int, pickPho
                 )
             }
     ) {
-        HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
+        HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = edit.dragId == null) { page ->
             Column(
                 Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
                     .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
             ) {
-                if (page == 0) PageOne(apps, openSearch) else PageTwo(apps, photoVersion, pickPhoto)
+                if (page == 0) PageOne(apps, openSearch, pickContact) { contactMenu = true }
+                else PageTwo(apps, photoVersion, pickPhoto)
                 Spacer(Modifier.weight(1f))
                 Box(Modifier.fillMaxWidth().padding(bottom = 10.dp), Alignment.Center) { PageDots(pager.currentPage, 2) }
-                if (page == 0) Dock(listOf(Slots.messages, Slots.camera, Slots.gemini, Slots.whatsapp), apps)
-                else Dock(listOf(Slots.soundcloud, Slots.snapseed, Slots.youtube, Slots.tiktok), apps)
+                Dock(if (page == 0) "d0_" else "d1_", apps)
             }
         }
 
@@ -99,22 +112,86 @@ fun HomeScreen(apps: List<AppEntry>, homeSignal: Int, photoVersion: Int, pickPho
             visible = drawer,
             enter = slideInVertically { it / 3 } + fadeIn(),
             exit = slideOutVertically { it / 3 } + fadeOut(),
-        ) { Drawer(apps) { drawer = false } }
+        ) { Drawer(apps, onClose = { drawer = false }) }
+
+        TrashZone()
+
+        // pilih aplikasi pengganti untuk sebuah slot
+        val pid = edit.pickId
+        if (pid != null) {
+            Drawer(
+                apps,
+                onClose = { edit.pickId = null },
+                onPick = { app ->
+                    store.replace(pid, app.pkg)
+                    edit.pickId = null
+                },
+            )
+        }
+
+        // menu ikon (tahan lalu lepas tanpa geser)
+        val mid = edit.menuId
+        if (mid != null) {
+            val t = store.tileFor(ctx, apps, mid)
+            ActionMenu(
+                title = if (t is Tile.App) t.entry.label else "Slot ikon",
+                hint = "Tahan lalu geser ikon untuk memindah atau menukar posisi.",
+                actions = listOf<Pair<String, () -> Unit>>(
+                    "Ganti aplikasi" to { edit.menuId = null; edit.pickId = mid },
+                    "Hapus dari layar" to { store.remove(mid); edit.menuId = null },
+                    "Reset semua ikon" to { store.reset(); edit.menuId = null },
+                    "Batal" to { edit.menuId = null },
+                ),
+                onDismiss = { edit.menuId = null },
+            )
+        }
+
+        // pengaturan kontak WhatsApp
+        if (contactMenu) {
+            val listening = listenerEnabled(ctx)
+            val actions = mutableListOf<Pair<String, () -> Unit>>()
+            actions.add("Pilih kontak dari HP" to { contactMenu = false; pickContact() })
+            if (!listening) {
+                actions.add("Aktifkan notifikasi (realtime)" to {
+                    contactMenu = false
+                    safeStart(ctx, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                })
+            }
+            if (WaContact.name.isNotBlank()) {
+                actions.add("Hapus kontak" to { WaContact.clear(ctx); contactMenu = false })
+            }
+            actions.add("Tutup" to { contactMenu = false })
+            ActionMenu(
+                title = if (WaContact.name.isBlank()) "Kontak WhatsApp" else WaContact.name,
+                hint = if (listening) "Pesan baru dari WhatsApp tampil langsung di sini. Notifikasi: aktif."
+                else "Aktifkan akses notifikasi agar pesan baru dari kontak ini tampil langsung.",
+                actions = actions,
+                onDismiss = { contactMenu = false },
+            )
+        }
+
+        DragGhost()
+    }
     }
 }
 
 @Composable
-private fun ColumnScope.PageOne(apps: List<AppEntry>, openSearch: () -> Unit) {
+private fun ColumnScope.PageOne(
+    apps: List<AppEntry>,
+    openSearch: () -> Unit,
+    pickContact: () -> Unit,
+    onContactSettings: () -> Unit,
+) {
     BigClock(Modifier.fillMaxWidth().height(210.dp))
     SearchBar(onSearch = openSearch, onAssistant = openSearch)
     Spacer(Modifier.height(16.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Folder(listOf(Slots.chrome, Slots.photos, Slots.keep, Slots.play), apps, 2, Modifier.fillMaxWidth().aspectRatio(1f))
+            Folder("g1_", apps, 2, Modifier.fillMaxWidth().aspectRatio(1f))
             AlarmPill(Modifier.fillMaxWidth().height(62.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ContactPill(Modifier.fillMaxWidth().height(54.dp), apps)
+            ContactPill(Modifier.fillMaxWidth().height(54.dp), apps, pickContact, onContactSettings)
             WeatherCard(Modifier.fillMaxWidth().aspectRatio(1f))
         }
     }
@@ -124,18 +201,18 @@ private fun ColumnScope.PageOne(apps: List<AppEntry>, openSearch: () -> Unit) {
 private fun ColumnScope.PageTwo(apps: List<AppEntry>, photoVersion: Int, pickPhoto: () -> Unit) {
     Spacer(Modifier.height(8.dp))
     Row(Modifier.fillMaxWidth().height(128.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Folder(listOf(Slots.capcut, Slots.canva), apps, 1, Modifier.width(80.dp).fillMaxHeight())
+        Folder("g2_", apps, 1, Modifier.width(80.dp).fillMaxHeight())
         PhotoCountdown(Modifier.weight(1f).fillMaxHeight(), photoVersion, pickPhoto)
     }
     Spacer(Modifier.height(14.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Folder(listOf(Slots.axis, Slots.gopay, Slots.calculator, Slots.ovo), apps, 2, Modifier.fillMaxWidth().aspectRatio(1f))
+            Folder("g3_", apps, 2, Modifier.fillMaxWidth().aspectRatio(1f))
             MusicCard(Modifier.fillMaxWidth().aspectRatio(1f))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             BatteryPill(Modifier.fillMaxWidth().height(52.dp))
-            Folder(listOf(Slots.boost, Slots.security, Slots.files, Slots.phone), apps, 2, Modifier.fillMaxWidth().aspectRatio(1f))
+            Folder("g4_", apps, 2, Modifier.fillMaxWidth().aspectRatio(1f))
             DndPill(Modifier.fillMaxWidth().height(56.dp))
         }
     }
@@ -162,7 +239,7 @@ fun BigClock(modifier: Modifier = Modifier) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun Drawer(apps: List<AppEntry>, onClose: () -> Unit) {
+fun Drawer(apps: List<AppEntry>, onClose: () -> Unit, onPick: ((AppEntry) -> Unit)? = null) {
     val ctx = LocalContext.current
     var query by remember { mutableStateOf("") }
     val list = remember(apps, query) { apps.filter { it.label.contains(query, ignoreCase = true) } }
@@ -199,12 +276,16 @@ fun Drawer(apps: List<AppEntry>, onClose: () -> Unit) {
                     Modifier.fillMaxWidth().padding(vertical = 8.dp)
                         .pointerInput(app.pkg) {
                             detectTapGestures(
-                                onTap = { launchApp(ctx, app.pkg); onClose() },
+                                onTap = {
+                                    if (onPick != null) onPick(app) else { launchApp(ctx, app.pkg); onClose() }
+                                },
                                 onLongPress = {
-                                    safeStart(
-                                        ctx,
-                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.pkg}")),
-                                    )
+                                    if (onPick == null) {
+                                        safeStart(
+                                            ctx,
+                                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.pkg}")),
+                                        )
+                                    }
                                 },
                             )
                         },
