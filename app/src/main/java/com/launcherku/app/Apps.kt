@@ -1,7 +1,10 @@
 package com.launcherku.app
 
+import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
+import android.view.View
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -54,6 +57,25 @@ fun launchApp(ctx: Context, pkg: String) {
             it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             ctx.startActivity(it)
         }
+    } catch (_: Exception) {
+    }
+}
+
+/**
+ * Buka aplikasi dengan animasi zoom dari posisi ikon (seperti iPhone).
+ * [onLaunched] dipanggil kalau aplikasi benar-benar berhasil dijalankan.
+ */
+fun launchAppAnimated(ctx: Context, pkg: String, view: View?, from: Rect?, onLaunched: () -> Unit) {
+    try {
+        val intent = ctx.packageManager.getLaunchIntentForPackage(pkg) ?: return
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val options = if (view != null && from != null) {
+            ActivityOptions.makeScaleUpAnimation(
+                view, from.left.toInt(), from.top.toInt(), from.width.toInt(), from.height.toInt(),
+            ).toBundle()
+        } else null
+        ctx.startActivity(intent, options)
+        onLaunched()
     } catch (_: Exception) {
     }
 }

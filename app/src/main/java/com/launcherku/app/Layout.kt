@@ -3,6 +3,7 @@ package com.launcherku.app
 import android.content.Context
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -104,6 +105,9 @@ class EditState {
     var overId by mutableStateOf<String?>(null)
     var overTrash by mutableStateOf(false)
 
+    /** true selama aplikasi sedang dibuka: layar home membesar & memudar, lalu kembali saat pulang. */
+    var opening by mutableStateOf(false)
+
     var menuId by mutableStateOf<String?>(null)
     var pickId by mutableStateOf<String?>(null)
 
@@ -152,3 +156,9 @@ class EditState {
 
 val LocalLayout = compositionLocalOf<LayoutStore> { error("LayoutStore belum disediakan") }
 val LocalEdit = compositionLocalOf<EditState> { error("EditState belum disediakan") }
+
+/** Status siklus hidup activity, diisi dari MainActivity. */
+object AppLifecycle {
+    var resumed by mutableStateOf(true)
+    var resumeCount by mutableIntStateOf(0)
+}

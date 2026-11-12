@@ -1,6 +1,9 @@
 package com.launcherku.app
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +11,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +28,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -58,6 +63,19 @@ fun EditableTile(id: String, apps: List<AppEntry>, size: Dp = 52.dp) {
     val tile = store.tileFor(ctx, apps, id)
     val shape = RoundedCornerShape(size * 0.27f)
     val hovered = edit.dragId != null && edit.overId == id
+    val view = LocalView.current
+    val pressSource = remember { MutableInteractionSource() }
+    val pressed by pressSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed && edit.dragId == null) 0.88f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "press",
+    )
+    val hoverScale by animateFloatAsState(
+        targetValue = if (hovered) 1.15f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "hover",
+    )
 
     DisposableEffect(id) { onDispose { edit.bounds.remove(id) } }
 
@@ -67,7 +85,7 @@ fun EditableTile(id: String, apps: List<AppEntry>, size: Dp = 52.dp) {
             .onGloballyPositioned { edit.bounds[id] = it.boundsInRoot() }
             .graphicsLayer {
                 alpha = if (edit.dragId == id) 0.25f else 1f
-                val s = if (hovered) 1.15f else 1f
+                val s = pressScale * hoverScale
                 scaleX = s
                 scaleY = s
             }
@@ -98,12 +116,16 @@ fun EditableTile(id: String, apps: List<AppEntry>, size: Dp = 52.dp) {
                 )
             }
             .clip(shape)
-            .clickable {
+            .clickable(interactionSource = pressSource, indication = null) {
                 if (edit.suppressClick) {
                     edit.suppressClick = false
                 } else {
                     val t = store.tileFor(ctx, currentApps, id)
-                    if (t is Tile.App) launchApp(ctx, t.entry.pkg) else edit.pickId = id
+                    if (t is Tile.App) {
+                        launchAppAnimated(ctx, t.entry.pkg, view, edit.bounds[id]) { edit.opening = true }
+                    } else {
+                        edit.pickId = id
+                    }
                 }
             },
         contentAlignment = Alignment.Center,

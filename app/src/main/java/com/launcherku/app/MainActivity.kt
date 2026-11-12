@@ -100,6 +100,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        AppLifecycle.resumed = true
+        AppLifecycle.resumeCount++
+    }
+
+    override fun onPause() {
+        super.onPause()
+        AppLifecycle.resumed = false
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN) homeSignal++

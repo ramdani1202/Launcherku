@@ -5,6 +5,9 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -34,7 +37,10 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,6 +63,20 @@ fun HomeScreen(
     var contactMenu by remember { mutableStateOf(false) }
     val store = remember { LayoutStore(ctx) }
     val edit = remember { EditState() }
+
+    // efek "zoom" layar home saat aplikasi dibuka / ditutup (mirip iPhone)
+    val openP by animateFloatAsState(
+        targetValue = if (edit.opening) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow),
+        label = "open",
+    )
+    LaunchedEffect(AppLifecycle.resumeCount) { edit.opening = false }
+    LaunchedEffect(edit.opening) {
+        if (edit.opening) {
+            delay(1500)
+            if (AppLifecycle.resumed) edit.opening = false
+        }
+    }
 
     LaunchedEffect(homeSignal) {
         drawer = false
@@ -95,7 +115,16 @@ fun HomeScreen(
                 )
             }
     ) {
-        HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = edit.dragId == null) { page ->
+        HorizontalPager(
+            pager,
+            Modifier.fillMaxSize().graphicsLayer {
+                val s = 1f + 0.12f * openP
+                scaleX = s
+                scaleY = s
+                alpha = 1f - openP
+            },
+            userScrollEnabled = edit.dragId == null,
+        ) { page ->
             Column(
                 Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
                     .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
@@ -241,6 +270,9 @@ fun BigClock(modifier: Modifier = Modifier) {
 @Composable
 fun Drawer(apps: List<AppEntry>, onClose: () -> Unit, onPick: ((AppEntry) -> Unit)? = null) {
     val ctx = LocalContext.current
+    val view = LocalView.current
+    val edit = LocalEdit.current
+    val rects = remember { HashMap<String, androidx.compose.ui.geometry.Rect>() }
     var query by remember { mutableStateOf("") }
     val list = remember(apps, query) { apps.filter { it.label.contains(query, ignoreCase = true) } }
     BackHandler(onBack = onClose)
@@ -274,10 +306,16 @@ fun Drawer(apps: List<AppEntry>, onClose: () -> Unit, onPick: ((AppEntry) -> Uni
             items(list, key = { it.pkg }) { app ->
                 Column(
                     Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                        .onGloballyPositioned { rects[app.pkg] = it.boundsInRoot() }
                         .pointerInput(app.pkg) {
                             detectTapGestures(
                                 onTap = {
-                                    if (onPick != null) onPick(app) else { launchApp(ctx, app.pkg); onClose() }
+                                    if (onPick != null) {
+                                        onPick(app)
+                                    } else {
+                                        launchAppAnimated(ctx, app.pkg, view, rects[app.pkg]) { edit.opening = true }
+                                        onClose()
+                                    }
                                 },
                                 onLongPress = {
                                     if (onPick == null) {
