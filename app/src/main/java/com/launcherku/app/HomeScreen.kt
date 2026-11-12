@@ -13,6 +13,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -197,7 +198,7 @@ fun Drawer(apps: List<AppEntry>, onClose: () -> Unit) {
                 Column(
                     Modifier.fillMaxWidth().padding(vertical = 8.dp)
                         .pointerInput(app.pkg) {
-                            androidx.compose.foundation.gestures.detectTapGestures(
+                            detectTapGestures(
                                 onTap = { launchApp(ctx, app.pkg); onClose() },
                                 onLongPress = {
                                     safeStart(
