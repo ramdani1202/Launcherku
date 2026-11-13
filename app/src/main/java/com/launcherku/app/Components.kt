@@ -180,6 +180,10 @@ fun MediaIcon(kind: Int, modifier: Modifier = Modifier.size(15.dp)) = Canvas(mod
             drawRect(Color.White, Offset(0f, 0f), Size(w * .15f, h))
             drawPath(Path().apply { moveTo(w, 0f); lineTo(w * .25f, h / 2); lineTo(w, h); close() }, Color.White)
         }
+        3 -> {
+            drawRect(Color.White, Offset(w * .1f, 0f), Size(w * .3f, h))
+            drawRect(Color.White, Offset(w * .6f, 0f), Size(w * .3f, h))
+        }
         else -> {
             drawRect(Color.White, Offset(w * .85f, 0f), Size(w * .15f, h))
             drawPath(Path().apply { moveTo(0f, 0f); lineTo(w * .75f, h / 2); lineTo(0f, h); close() }, Color.White)

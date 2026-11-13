@@ -35,6 +35,7 @@ import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.Locale
@@ -235,57 +236,144 @@ fun DndPill(modifier: Modifier) {
     }
 }
 
+private const val YT_PKG = "com.google.android.youtube"
+
+/** Pemutar YouTube: judul, channel, gambar, dan tombol kontrol dibaca langsung dari sesi media YouTube. */
 @Composable
 fun MusicCard(modifier: Modifier) {
-    Box(modifier.clip(RoundedCornerShape(26.dp)).background(Color(0xFF17171B))) {
-        Box(
-            Modifier.align(Alignment.TopCenter).offset(y = (-18).dp).size(84.dp).clip(CircleShape)
-                .background(Brush.verticalGradient(listOf(Color(0xFF6B6B70), Color(0xFF2A2A2E))))
-        )
+    val ctx = LocalContext.current
+    var listening by remember { mutableStateOf(listenerEnabled(ctx)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            listening = listenerEnabled(ctx)
+            delay(2000)
+        }
+    }
+    val active = MediaState.active
+    val art = MediaState.art
+    val title = if (active && MediaState.title.isNotBlank()) MediaState.title else "YouTube"
+    val subtitle = when {
+        active -> MediaState.artist
+        listening -> "Tidak ada yang diputar"
+        else -> "Aktifkan akses notifikasi"
+    }
+    Box(
+        modifier.clip(RoundedCornerShape(26.dp)).background(Color(0xFF17171B)).clickable {
+            val pi = MediaState.controller?.sessionActivity
+            when {
+                !listening -> safeStart(ctx, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                pi != null -> try { pi.send() } catch (_: Exception) { launchApp(ctx, YT_PKG) }
+                else -> launchApp(ctx, YT_PKG)
+            }
+        }
+    ) {
+        if (art != null) {
+            Image(
+                art, null,
+                Modifier.align(Alignment.TopCenter).offset(y = (-18).dp).size(84.dp).clip(CircleShape),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(
+                Modifier.align(Alignment.TopCenter).offset(y = (-18).dp).size(84.dp).clip(CircleShape)
+                    .background(Brush.verticalGradient(listOf(Color(0xFF6B6B70), Color(0xFF2A2A2E))))
+            )
+        }
         Column(
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            T(Config.MUSIC_TITLE, 13, Color.White, FontWeight.Bold)
-            T(Config.MUSIC_ARTIST, 10, Color(0xFFA0A0A8))
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                MediaIcon(0, Modifier.size(12.dp)); MediaIcon(1, Modifier.size(16.dp)); MediaIcon(2, Modifier.size(12.dp))
+            T(title, 13, Color.White, FontWeight.Bold)
+            T(subtitle, 10, Color(0xFFA0A0A8))
+            Spacer(Modifier.height(2.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.clip(CircleShape).clickable { MediaState.controller?.transportControls?.skipToPrevious() }
+                        .padding(10.dp)
+                ) { MediaIcon(0, Modifier.size(12.dp)) }
+                Box(
+                    Modifier.clip(CircleShape).clickable {
+                        val t = MediaState.controller?.transportControls
+                        if (MediaState.playing) t?.pause() else t?.play()
+                    }.padding(8.dp)
+                ) { MediaIcon(if (MediaState.playing) 3 else 1, Modifier.size(16.dp)) }
+                Box(
+                    Modifier.clip(CircleShape).clickable { MediaState.controller?.transportControls?.skipToNext() }
+                        .padding(10.dp)
+                ) { MediaIcon(2, Modifier.size(12.dp)) }
             }
         }
     }
 }
 
+/** Email Gmail terbaru + akun + jumlah, dibaca dari notifikasi Gmail. */
 @Composable
-fun TimerWidget(modifier: Modifier) {
+fun GmailWidget(modifier: Modifier) {
     val ctx = LocalContext.current
+    var listening by remember { mutableStateOf(listenerEnabled(ctx)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            listening = listenerEnabled(ctx)
+            delay(2000)
+        }
+    }
+    val latest = GmailInbox.latest()
+    val count = GmailInbox.count
+    val account = GmailInbox.account
     Row(
         modifier.clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = 0.93f))
             .clickable {
-                safeStart(
-                    ctx,
-                    Intent(AlarmClock.ACTION_SET_TIMER)
-                        .putExtra(AlarmClock.EXTRA_LENGTH, Config.TIMER_MINUTES * 60)
-                        .putExtra(AlarmClock.EXTRA_SKIP_UI, false),
-                )
+                val pi = latest?.intent
+                when {
+                    !listening -> safeStart(ctx, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    pi != null -> try { pi.send() } catch (_: Exception) { launchApp(ctx, "com.google.android.gm") }
+                    else -> launchApp(ctx, "com.google.android.gm")
+                }
             }
-            .padding(start = 22.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 20.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        T("%02d MIN".format(Config.TIMER_MINUTES), 44, Ink, FontWeight.Bold, family = CondensedBold)
-        Spacer(Modifier.weight(1f))
-        KufiLogo(Modifier.fillMaxHeight().aspectRatio(1f).clip(RoundedCornerShape(10.dp)))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            T(if (account.isNotBlank()) account else "Gmail", 11, Color(0xFF5B5B70), FontWeight.SemiBold)
+            if (latest != null) {
+                T(latest.sender, 16, Ink, FontWeight.Bold)
+                T(latest.subject, 12, Color(0xFF3A3A4A), FontWeight.Normal)
+            } else if (!listening) {
+                T("Aktifkan akses notifikasi", 14, Ink, FontWeight.Bold)
+            } else {
+                T("Tidak ada email baru", 15, Ink, FontWeight.Bold)
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            Modifier.fillMaxHeight().aspectRatio(1f).clip(RoundedCornerShape(16.dp)).background(Color(0xFFEA4335)),
+            contentAlignment = Alignment.Center,
+        ) {
+            T(if (count > 0) "$count" else "M", 30, Color.White, FontWeight.Bold, family = CondensedBold)
+        }
     }
 }
 
+/** Hari, tanggal, dan tahun realtime. Tahan lama untuk mengganti foto latar. */
 @Composable
-fun PhotoCountdown(modifier: Modifier, photoVersion: Int, onPickPhoto: () -> Unit) {
+fun DateCard(modifier: Modifier, photoVersion: Int, onPickPhoto: () -> Unit) {
     val ctx = LocalContext.current
     val photo = remember(photoVersion) {
         val f = File(ctx.filesDir, MainActivity.PHOTO_FILE)
         if (f.exists()) BitmapFactory.decodeFile(f.path)?.asImageBitmap() else null
     }
-    val days = remember { daysLeft() }
+    var today by remember { mutableStateOf(LocalDate.now()) }
+    LaunchedEffect(AppLifecycle.resumeCount) { today = LocalDate.now() }
+    LaunchedEffect(Unit) {
+        while (true) {
+            today = LocalDate.now()
+            val next = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            delay(maxOf(next - System.currentTimeMillis(), 1000L) + 500L)
+        }
+    }
+    val id = Locale.forLanguageTag("id-ID")
+    val dayName = today.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, id)
+    val monthName = today.month.getDisplayName(java.time.format.TextStyle.FULL, id)
     Box(
         modifier.clip(RoundedCornerShape(24.dp))
             .background(Brush.linearGradient(listOf(Color(0xFF7C6A5A), Color(0xFF3B302A))))
@@ -297,22 +385,10 @@ fun PhotoCountdown(modifier: Modifier, photoVersion: Int, onPickPhoto: () -> Uni
                 Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent))
             )
         )
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 14.dp)) {
-            T(Config.EVENT_TITLE, 11, Color.White, FontWeight.SemiBold)
-            T("${Config.EVENT_DAY} ${monthName(Config.EVENT_MONTH)}", 11, Color.White, FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            T("$days", 34, Color.White, FontWeight.Bold, family = CondensedBold)
-            T("DAYS LEFT", 9, Color.White, FontWeight.SemiBold)
+        Column(Modifier.align(Alignment.CenterStart).padding(start = 16.dp)) {
+            T(dayName, 14, Color.White, FontWeight.SemiBold)
+            T("${today.dayOfMonth}", 56, Color.White, FontWeight.Bold, family = CondensedBold)
+            T("$monthName ${today.year}", 13, Color.White, FontWeight.SemiBold)
         }
     }
 }
-
-private fun daysLeft(): Int {
-    val today = LocalDate.now()
-    var target = LocalDate.of(today.year, Config.EVENT_MONTH, Config.EVENT_DAY)
-    if (target.isBefore(today)) target = target.plusYears(1)
-    return ChronoUnit.DAYS.between(today, target).toInt()
-}
-
-private fun monthName(m: Int) =
-    listOf("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des")[m - 1]

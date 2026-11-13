@@ -10,15 +10,5 @@ object Config {
     const val WEATHER_TEXT = "Berawan"
     const val WEATHER_RANGE = "26°~33°"
 
-    // Widget hitung mundur foto (tahan lama untuk ganti foto)
-    const val EVENT_TITLE = "Ultah Istri"
-    const val EVENT_DAY = 25
-    const val EVENT_MONTH = 4
-
-    // Widget timer
-    const val TIMER_MINUTES = 5
-
-    // Widget musik (tampilan statis)
-    const val MUSIC_TITLE = "Those Eyes"
-    const val MUSIC_ARTIST = "New West"
+    // Tanggal, YouTube, dan Gmail di halaman 2 sekarang realtime (tidak perlu diatur di sini).
 }

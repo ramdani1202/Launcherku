@@ -231,7 +231,7 @@ private fun ColumnScope.PageTwo(apps: List<AppEntry>, photoVersion: Int, pickPho
     Spacer(Modifier.height(8.dp))
     Row(Modifier.fillMaxWidth().height(128.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Folder("g2_", apps, 1, Modifier.width(80.dp).fillMaxHeight())
-        PhotoCountdown(Modifier.weight(1f).fillMaxHeight(), photoVersion, pickPhoto)
+        DateCard(Modifier.weight(1f).fillMaxHeight(), photoVersion, pickPhoto)
     }
     Spacer(Modifier.height(14.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -246,7 +246,7 @@ private fun ColumnScope.PageTwo(apps: List<AppEntry>, photoVersion: Int, pickPho
         }
     }
     Spacer(Modifier.height(12.dp))
-    TimerWidget(Modifier.fillMaxWidth().height(66.dp))
+    GmailWidget(Modifier.fillMaxWidth().height(66.dp))
 }
 
 @Composable
