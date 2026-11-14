@@ -1,9 +1,6 @@
 package com.launcherku.app
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,6 +39,7 @@ private fun TileFace(tile: Tile) {
         is Tile.Missing -> Box(Modifier.fillMaxSize().background(tile.slot.fallbackColor), Alignment.Center) {
             T(tile.slot.fallbackText, if (tile.slot.fallbackText.length > 2) 11 else 20, weight = FontWeight.Bold)
         }
+        Tile.Loading -> Box(Modifier.fillMaxSize())
         Tile.Empty -> Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.18f)), Alignment.Center) {
             T("+", 22, Color.White.copy(alpha = 0.75f), FontWeight.Light)
         }
@@ -66,16 +64,8 @@ fun EditableTile(id: String, apps: List<AppEntry>, size: Dp = 52.dp) {
     val view = LocalView.current
     val pressSource = remember { MutableInteractionSource() }
     val pressed by pressSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (pressed && edit.dragId == null) 0.88f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "press",
-    )
-    val hoverScale by animateFloatAsState(
-        targetValue = if (hovered) 1.15f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "hover",
-    )
+    val pressScale = if (pressed && edit.dragId == null) 0.92f else 1f
+    val hoverScale = if (hovered) 1.15f else 1f
 
     DisposableEffect(id) { onDispose { edit.bounds.remove(id) } }
 
@@ -100,7 +90,7 @@ fun EditableTile(id: String, apps: List<AppEntry>, size: Dp = 52.dp) {
                 detectDragGesturesAfterLongPress(
                     onDragStart = { local ->
                         val t = store.tileFor(ctx, currentApps, id)
-                        if (t !is Tile.Empty) {
+                        if (t !is Tile.Empty && t !is Tile.Loading) {
                             edit.suppressClick = true
                             edit.begin(id, t, (edit.bounds[id]?.topLeft ?: Offset.Zero) + local)
                         }
@@ -122,8 +112,8 @@ fun EditableTile(id: String, apps: List<AppEntry>, size: Dp = 52.dp) {
                 } else {
                     val t = store.tileFor(ctx, currentApps, id)
                     if (t is Tile.App) {
-                        launchAppAnimated(ctx, t.entry.pkg, view, edit.bounds[id]) { edit.opening = true }
-                    } else {
+                        launchAppAnimated(ctx, t.entry.pkg, view, edit.bounds[id]) { }
+                    } else if (t !is Tile.Loading) {
                         edit.pickId = id
                     }
                 }

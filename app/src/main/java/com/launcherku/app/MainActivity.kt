@@ -10,6 +10,7 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -34,10 +35,12 @@ class MainActivity : ComponentActivity() {
     private var homeSignal by mutableIntStateOf(0)
     private var photoVersion by mutableIntStateOf(0)
 
+    private var pickTarget = PHOTO_FILE
+
     private val picker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
-            savePhoto(uri)
-            photoVersion++
+            if (savePhoto(uri, pickTarget)) photoVersion++
+            else Toast.makeText(this, "Foto gagal dimuat", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -57,7 +60,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val ctx = LocalContext.current
-            var apps by remember { mutableStateOf(emptyList<AppEntry>()) }
+            val apps = AppCache.apps
             var reload by remember { mutableIntStateOf(0) }
 
             DisposableEffect(Unit) {
@@ -69,7 +72,6 @@ class MainActivity : ComponentActivity() {
                 val filter = IntentFilter().apply {
                     addAction(Intent.ACTION_PACKAGE_ADDED)
                     addAction(Intent.ACTION_PACKAGE_REMOVED)
-                    addAction(Intent.ACTION_PACKAGE_CHANGED)
                     addDataScheme("package")
                 }
                 androidx.core.content.ContextCompat.registerReceiver(
@@ -79,14 +81,18 @@ class MainActivity : ComponentActivity() {
             }
 
             LaunchedEffect(reload) {
-                apps = withContext(Dispatchers.IO) { loadApps(ctx) }
+                // muat hanya kalau belum ada di memori atau ada aplikasi baru/dihapus
+                if (reload > 0 || AppCache.apps.isEmpty()) {
+                    AppCache.apps = withContext(Dispatchers.IO) { loadApps(ctx) }
+                }
             }
 
             HomeScreen(
                 apps = apps,
                 homeSignal = homeSignal,
                 photoVersion = photoVersion,
-                pickPhoto = {
+                pickPhoto = { target ->
+                    pickTarget = target
                     picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 },
                 pickContact = {
@@ -150,22 +156,36 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun savePhoto(uri: Uri) {
-        try {
+    private fun savePhoto(uri: Uri, name: String): Boolean {
+        var bmp: Bitmap? = try {
             val src = ImageDecoder.createSource(contentResolver, uri)
-            val bmp = ImageDecoder.decodeBitmap(src) { decoder, info, _ ->
+            ImageDecoder.decodeBitmap(src) { decoder, info, _ ->
                 val sample = max(1, max(info.size.width, info.size.height) / 900)
                 decoder.setTargetSampleSize(sample)
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             }
-            File(filesDir, PHOTO_FILE).outputStream().use {
-                bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
-            }
         } catch (_: Exception) {
+            null
+        }
+        if (bmp == null) {
+            bmp = try {
+                val opts = BitmapFactory.Options().apply { inSampleSize = 2 }
+                contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+            } catch (_: Exception) {
+                null
+            }
+        }
+        val out = bmp ?: return false
+        return try {
+            File(filesDir, name).outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 
     companion object {
         const val PHOTO_FILE = "widget_photo.jpg"
+        const val MUSIC_FILE = "music_photo.jpg"
     }
 }

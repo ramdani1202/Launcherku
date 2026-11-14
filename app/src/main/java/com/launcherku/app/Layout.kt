@@ -31,6 +31,7 @@ object Defaults {
 /** Isi sebuah slot setelah dicocokkan dengan aplikasi yang terpasang. */
 sealed interface Tile {
     object Empty : Tile
+    object Loading : Tile
     class App(val entry: AppEntry) : Tile
     class Missing(val slot: Slot) : Tile
 }
@@ -53,10 +54,10 @@ class LayoutStore(ctx: Context) {
 
     fun tileFor(ctx: Context, apps: List<AppEntry>, id: String): Tile {
         val token = overrides[id] ?: "def:$id"
+        // daftar aplikasi belum siap -> tampil kosong (transparan), bukan kotak warna pengganti
+        if (apps.isEmpty()) return Tile.Loading
         if (token.isEmpty()) return Tile.Empty
         if (token.startsWith("pkg:")) {
-            // daftar aplikasi belum selesai dimuat -> jangan tampilkan slot kosong dulu
-            if (apps.isEmpty()) return Tile.Missing(Defaults.slots[id] ?: Slot())
             val pkg = token.substring(4)
             val entry = apps.firstOrNull { it.pkg == pkg }
             return if (entry != null) Tile.App(entry) else Tile.Empty
@@ -104,9 +105,6 @@ class EditState {
     var dragPos by mutableStateOf(Offset.Zero)
     var overId by mutableStateOf<String?>(null)
     var overTrash by mutableStateOf(false)
-
-    /** true selama aplikasi sedang dibuka: layar home membesar & memudar, lalu kembali saat pulang. */
-    var opening by mutableStateOf(false)
 
     var menuId by mutableStateOf<String?>(null)
     var pickId by mutableStateOf<String?>(null)

@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -74,12 +75,8 @@ fun ContactPill(modifier: Modifier, apps: List<AppEntry>, onPick: () -> Unit, on
     val photo = WaContact.photo
     val msg = WaInbox.latestFor(name)
     var listening by remember { mutableStateOf(listenerEnabled(ctx)) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            listening = listenerEnabled(ctx)
-            delay(2000)
-        }
-    }
+    // cek ulang hanya saat launcher dibuka kembali (mis. setelah dari pengaturan), bukan terus-menerus
+    LaunchedEffect(AppLifecycle.resumeCount) { listening = listenerEnabled(ctx) }
     Row(
         modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.9f)).combinedClickable(
             onClick = {
@@ -238,16 +235,18 @@ fun DndPill(modifier: Modifier) {
 
 private const val YT_PKG = "com.google.android.youtube"
 
-/** Pemutar YouTube: judul, channel, gambar, dan tombol kontrol dibaca langsung dari sesi media YouTube. */
+/**
+ * Pemutar YouTube: judul, channel, dan tombol kontrol dibaca dari sesi media YouTube.
+ * Gambar latar diambil dari foto galeri: tahan lama kartu untuk memilih foto.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun MusicCard(modifier: Modifier) {
+fun MusicCard(modifier: Modifier, photoVersion: Int, onPickPhoto: () -> Unit) {
     val ctx = LocalContext.current
-    var listening by remember { mutableStateOf(listenerEnabled(ctx)) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            listening = listenerEnabled(ctx)
-            delay(2000)
-        }
+    val listening = remember(AppLifecycle.resumeCount) { listenerEnabled(ctx) }
+    val photo = remember(photoVersion) {
+        val f = File(ctx.filesDir, MainActivity.MUSIC_FILE)
+        if (f.exists()) BitmapFactory.decodeFile(f.path)?.asImageBitmap() else null
     }
     val active = MediaState.active
     val art = MediaState.art
@@ -258,33 +257,34 @@ fun MusicCard(modifier: Modifier) {
         else -> "Aktifkan akses notifikasi"
     }
     Box(
-        modifier.clip(RoundedCornerShape(26.dp)).background(Color(0xFF17171B)).clickable {
-            val pi = MediaState.controller?.sessionActivity
-            when {
-                !listening -> safeStart(ctx, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                pi != null -> try { pi.send() } catch (_: Exception) { launchApp(ctx, YT_PKG) }
-                else -> launchApp(ctx, YT_PKG)
-            }
-        }
+        modifier.clip(RoundedCornerShape(26.dp)).background(Color(0xFF17171B)).combinedClickable(
+            onClick = {
+                val pi = MediaState.controller?.sessionActivity
+                when {
+                    !listening -> safeStart(ctx, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    pi != null -> try { pi.send() } catch (_: Exception) { launchApp(ctx, YT_PKG) }
+                    else -> launchApp(ctx, YT_PKG)
+                }
+            },
+            onLongClick = onPickPhoto,
+        )
     ) {
-        if (art != null) {
-            Image(
-                art, null,
-                Modifier.align(Alignment.TopCenter).offset(y = (-18).dp).size(84.dp).clip(CircleShape),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Box(
-                Modifier.align(Alignment.TopCenter).offset(y = (-18).dp).size(84.dp).clip(CircleShape)
-                    .background(Brush.verticalGradient(listOf(Color(0xFF6B6B70), Color(0xFF2A2A2E))))
-            )
+        val cover = photo ?: art
+        if (cover != null) {
+            Image(cover, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
+        // lapisan gelap di bawah supaya teks dan tombol terbaca
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)), startY = 120f)
+            )
+        )
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             T(title, 13, Color.White, FontWeight.Bold)
-            T(subtitle, 10, Color(0xFFA0A0A8))
+            T(subtitle, 10, Color(0xFFD0D0D8))
             Spacer(Modifier.height(2.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -310,13 +310,7 @@ fun MusicCard(modifier: Modifier) {
 @Composable
 fun GmailWidget(modifier: Modifier) {
     val ctx = LocalContext.current
-    var listening by remember { mutableStateOf(listenerEnabled(ctx)) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            listening = listenerEnabled(ctx)
-            delay(2000)
-        }
-    }
+    val listening = remember(AppLifecycle.resumeCount) { listenerEnabled(ctx) }
     val latest = GmailInbox.latest()
     val count = GmailInbox.count
     val account = GmailInbox.account
@@ -345,11 +339,14 @@ fun GmailWidget(modifier: Modifier) {
             }
         }
         Spacer(Modifier.width(8.dp))
-        Box(
-            Modifier.fillMaxHeight().aspectRatio(1f).clip(RoundedCornerShape(16.dp)).background(Color(0xFFEA4335)),
-            contentAlignment = Alignment.Center,
-        ) {
-            T(if (count > 0) "$count" else "M", 30, Color.White, FontWeight.Bold, family = CondensedBold)
+        Box(Modifier.fillMaxHeight().aspectRatio(1f), contentAlignment = Alignment.Center) {
+            Image(painterResource(R.drawable.gmail_logo), "Gmail", Modifier.width(40.dp).height(30.dp))
+            if (count > 0) {
+                Box(
+                    Modifier.align(Alignment.TopEnd).clip(CircleShape).background(Color(0xFFEA4335))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) { T("$count", 11, Color.White, FontWeight.Bold) }
+            }
         }
     }
 }

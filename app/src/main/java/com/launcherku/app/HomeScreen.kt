@@ -54,7 +54,7 @@ fun HomeScreen(
     apps: List<AppEntry>,
     homeSignal: Int,
     photoVersion: Int,
-    pickPhoto: () -> Unit,
+    pickPhoto: (String) -> Unit,
     pickContact: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -63,20 +63,6 @@ fun HomeScreen(
     var contactMenu by remember { mutableStateOf(false) }
     val store = remember { LayoutStore(ctx) }
     val edit = remember { EditState() }
-
-    // efek "zoom" layar home saat aplikasi dibuka / ditutup (mirip iPhone)
-    val openP by animateFloatAsState(
-        targetValue = if (edit.opening) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMediumLow),
-        label = "open",
-    )
-    LaunchedEffect(AppLifecycle.resumeCount) { edit.opening = false }
-    LaunchedEffect(edit.opening) {
-        if (edit.opening) {
-            delay(1500)
-            if (AppLifecycle.resumed) edit.opening = false
-        }
-    }
 
     LaunchedEffect(homeSignal) {
         drawer = false
@@ -117,12 +103,7 @@ fun HomeScreen(
     ) {
         HorizontalPager(
             pager,
-            Modifier.fillMaxSize().graphicsLayer {
-                val s = 1f + 0.12f * openP
-                scaleX = s
-                scaleY = s
-                alpha = 1f - openP
-            },
+            Modifier.fillMaxSize(),
             userScrollEnabled = edit.dragId == null,
         ) { page ->
             Column(
@@ -137,11 +118,7 @@ fun HomeScreen(
             }
         }
 
-        AnimatedVisibility(
-            visible = drawer,
-            enter = slideInVertically { it / 3 } + fadeIn(),
-            exit = slideOutVertically { it / 3 } + fadeOut(),
-        ) { Drawer(apps, onClose = { drawer = false }) }
+        if (drawer) Drawer(apps, onClose = { drawer = false })
 
         TrashZone()
 
@@ -227,17 +204,17 @@ private fun ColumnScope.PageOne(
 }
 
 @Composable
-private fun ColumnScope.PageTwo(apps: List<AppEntry>, photoVersion: Int, pickPhoto: () -> Unit) {
+private fun ColumnScope.PageTwo(apps: List<AppEntry>, photoVersion: Int, pickPhoto: (String) -> Unit) {
     Spacer(Modifier.height(8.dp))
     Row(Modifier.fillMaxWidth().height(128.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Folder("g2_", apps, 1, Modifier.width(80.dp).fillMaxHeight())
-        DateCard(Modifier.weight(1f).fillMaxHeight(), photoVersion, pickPhoto)
+        DateCard(Modifier.weight(1f).fillMaxHeight(), photoVersion) { pickPhoto(MainActivity.PHOTO_FILE) }
     }
     Spacer(Modifier.height(14.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Folder("g3_", apps, 2, Modifier.fillMaxWidth().aspectRatio(1f))
-            MusicCard(Modifier.fillMaxWidth().aspectRatio(1f))
+            MusicCard(Modifier.fillMaxWidth().aspectRatio(1f), photoVersion) { pickPhoto(MainActivity.MUSIC_FILE) }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             BatteryPill(Modifier.fillMaxWidth().height(52.dp))
@@ -313,7 +290,7 @@ fun Drawer(apps: List<AppEntry>, onClose: () -> Unit, onPick: ((AppEntry) -> Uni
                                     if (onPick != null) {
                                         onPick(app)
                                     } else {
-                                        launchAppAnimated(ctx, app.pkg, view, rects[app.pkg]) { edit.opening = true }
+                                        launchAppAnimated(ctx, app.pkg, view, rects[app.pkg]) { }
                                         onClose()
                                     }
                                 },

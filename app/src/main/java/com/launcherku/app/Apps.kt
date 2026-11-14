@@ -4,6 +4,9 @@ import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
 import android.view.View
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -24,6 +27,11 @@ data class Slot(
     val category: String? = null,
 )
 
+/** Daftar aplikasi disimpan di memori supaya home langsung penuh saat dibuka lagi. */
+object AppCache {
+    var apps by mutableStateOf(emptyList<AppEntry>())
+}
+
 fun loadApps(ctx: Context): List<AppEntry> {
     val pm = ctx.packageManager
     val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
@@ -34,7 +42,7 @@ fun loadApps(ctx: Context): List<AppEntry> {
             AppEntry(
                 label = it.loadLabel(pm).toString(),
                 pkg = it.activityInfo.packageName,
-                icon = it.loadIcon(pm).toBitmap(144, 144).asImageBitmap(),
+                icon = it.loadIcon(pm).toBitmap(120, 120).asImageBitmap(),
             )
         }
         .sortedBy { it.label.lowercase() }
@@ -65,7 +73,7 @@ fun launchApp(ctx: Context, pkg: String) {
  * Buka aplikasi dengan animasi zoom dari posisi ikon (seperti iPhone).
  * [onLaunched] dipanggil kalau aplikasi benar-benar berhasil dijalankan.
  */
-fun launchAppAnimated(ctx: Context, pkg: String, view: View?, from: Rect?, onLaunched: () -> Unit) {
+fun launchAppAnimated(ctx: Context, pkg: String, view: View?, from: Rect?, onLaunched: () -> Unit = {}) {
     try {
         val intent = ctx.packageManager.getLaunchIntentForPackage(pkg) ?: return
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
